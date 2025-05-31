@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SC Beauty 銀行</title>
+    <style>
+        body {
+            font-family: Arial, 'Noto Sans TC', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+        .admin-section {
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 20px;
+        }
+        .error {
+            color: red;
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+        }
+        .modal-content input {
+            margin-bottom: 10px;
+        }
+        .modal-content button {
+            width: 48%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SC Beauty 銀行</h1>
+        <div class="form-group">
+            <label for="employeeId">員工號</label>
+            <input type="text" id="employeeId" placeholder="請輸入7或8位數員工號">
+            <button onclick="checkBalance()">查詢餘額</button>
+        </div>
+        <div class="form-group">
+            <label for="balance">當前餘額</label>
+            <input type="text" id="balance" readonly value="">
+        </div>
+        <div class="form-group">
+            <label for="deposit">存款金額</label>
+            <input type="number" id="deposit" min="0" placeholder="請輸入存款金額">
+            <button onclick="showAdminAuth('deposit')">存款</button>
+        </div>
+        <div class="form-group">
+            <label for="withdraw">提款金額</label>
+            <input type="number" id="withdraw" min="0" placeholder="請輸入提款金額">
+            <button onclick="showAdminAuth('withdraw')">提款</button>
+        </div>
+        <div class="form-group">
+            <label>目前日期</label>
+            <input type="text" id="currentDate" readonly>
+        </div>
+        <p id="error" class="error"></p>
+
+        <div class="admin-section">
+            <h2>管理員專區</h2>
+            <div class="form-group">
+                <label for="adminUsername">管理員帳號</label>
+                <input type="text" id="adminUsername" placeholder="請輸入管理員帳號">
+            </div>
+            <div class="form-group">
+                <label for="adminPassword">管理員密碼</label>
+                <input type="password" id="adminPassword" placeholder="請輸入管理員密碼">
+                <button onclick="loginAdmin()">登入</button>
+            </div>
+            <div id="adminArea" style="display: none;">
+                <h3>所有交易記錄</h3>
+                <table id="transactionTable">
+                    <thead>
+                        <tr>
+                            <th>員工號</th>
+                            <th>交易類型</th>
+                            <th>金額</th>
+                            <th>日期</th>
+                            <th>餘額</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理員驗證彈窗 -->
+    <div id="adminAuthModal" class="modal">
+        <div class="modal-content">
+            <h3>管理員驗證</h3>
+            <div class="form-group">
+                <label for="modalUsername">管理員帳號</label>
+                <input type="text" id="modalUsername" placeholder="請輸入管理員帳號">
+            </div>
+            <div class="form-group">
+                <label for="modalPassword">管理員密碼</label>
+                <input type="password" id="modalPassword" placeholder="請輸入管理員密碼">
+            </div>
+            <button onclick="confirmAdminAuth()">確認</button>
+            <button onclick="closeAdminAuth()">取消</button>
+        </div>
+    </div>
+
+    <script>
+        // 銀行資料儲存
+        let bankData = JSON.parse(localStorage.getItem('bankData')) || {};
+        let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+        const ADMIN_USERNAME = "admin";
+        const ADMIN_PASSWORD = "123";
+        let currentAction = null; // 當前操作：'deposit' 或 'withdraw'
+
+        // 保存資料到 localStorage
+        function saveData() {
+            localStorage.setItem('bankData', JSON.stringify(bankData));
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+        }
+
+        // 初始化日期
+        function updateDate() {
+            const today = new Date();
+            const formattedDate = today.toLocaleDateString('zh-TW', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            document.getElementById('currentDate').value = formattedDate;
+        }
+
+        // 顯示錯誤訊息
+        function showError(message) {
+            document.getElementById('error').textContent = message;
+            setTimeout(() => document.getElementById('error').textContent = '', 3000);
+        }
+
+        // 驗證員工號格式（7或8位數字）
+        function validateEmployeeId(employeeId) {
+            const regex = /^\d{7,8}$/;
+            if (!employeeId || !regex.test(employeeId)) {
+                showError("員工號必須為7或8位數字");
+                return false;
+            }
+            return true;
+        }
+
+        // 檢查員工號是否存在，若不存在則初始化
+        function initializeEmployee(employeeId) {
+            if (!validateEmployeeId(employeeId)) {
+                return false;
+            }
+            if (!bankData[employeeId]) {
+                bankData[employeeId] = { balance: 0 };
+                saveData();
+            }
+            return true;
+        }
+
+        // 查詢餘額
+        function checkBalance() {
+            const employeeId = document.getElementById('employeeId').value.trim();
+            if (initializeEmployee(employeeId)) {
+                document.getElementById('balance').value = bankData[employeeId].balance;
+            }
+        }
+
+        // 顯示管理員驗證彈窗
+        function showAdminAuth(action) {
+            const employeeId = document.getElementById('employeeId').value.trim();
+            if (!initializeEmployee(employeeId)) return;
+            currentAction = action;
+            document.getElementById('adminAuthModal').style.display = 'flex';
+            document.getElementById('modalUsername').value = '';
+            document.getElementById('modalPassword').value = '';
+        }
+
+        // 關閉管理員驗證彈窗
+        function closeAdminAuth() {
+            document.getElementById('adminAuthModal').style.display = 'none';
+            currentAction = null;
+        }
+
+        // 確認管理員驗證
+        function confirmAdminAuth() {
+            const username = document.getElementById('modalUsername').value;
+            const password = document.getElementById('modalPassword').value;
+            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                closeAdminAuth();
+                if (currentAction === 'deposit') {
+                    handleDeposit();
+                } else if (currentAction === 'withdraw') {
+                    handleWithdraw();
+                }
+            } else {
+                showError("管理員帳號或密碼錯誤");
+                document.getElementById('modalUsername').value = '';
+                document.getElementById('modalPassword').value = '';
+            }
+        }
+
+        // 存款
+        function handleDeposit() {
+            const employeeId = document.getElementById('employeeId').value.trim();
+            const amount = parseFloat(document.getElementById('deposit').value);
+            if (!initializeEmployee(employeeId)) return;
+
+            if (isNaN(amount) || amount <= 0) {
+                showError("請輸入有效的存款金額");
+                return;
+            }
+
+            bankData[employeeId].balance += amount;
+            document.getElementById('balance').value = bankData[employeeId].balance;
+            transactions.push({
+                employeeId,
+                type: '存款',
+                amount,
+                date: new Date().toLocaleString('zh-TW'),
+                balance: bankData[employeeId].balance
+            });
+            document.getElementById('deposit').value = '';
+            saveData();
+            updateAdminTable();
+        }
+
+        // 提款
+        function handleWithdraw() {
+            const employeeId = document.getElementById('employeeId').value.trim();
+            const amount = parseFloat(document.getElementById('withdraw').value);
+            if (!initializeEmployee(employeeId)) return;
+
+            if (isNaN(amount) || amount <= 0) {
+                showError("請輸入有效的提款金額");
+                return;
+            }
+
+            if (amount > bankData[employeeId].balance) {
+                showError("餘額不足");
+                return;
+            }
+
+            bankData[employeeId].balance -= amount;
+            document.getElementById('balance').value = bankData[employeeId].balance;
+            transactions.push({
+                employeeId,
+                type: '提款',
+                amount,
+                date: new Date().toLocaleString('zh-TW'),
+                balance: bankData[employeeId].balance
+            });
+            document.getElementById('withdraw').value = '';
+            saveData();
+            updateAdminTable();
+        }
+
+        // 管理員登入
+        function loginAdmin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+
+            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                document.getElementById('adminArea').style.display = 'block';
+                updateAdminTable();
+                document.getElementById('adminUsername').value = '';
+                document.getElementById('adminPassword').value = '';
+            } else {
+                showError("管理員帳號或密碼錯誤");
+            }
+        }
+
+        // 刪除交易記錄
+        function deleteTransaction(index) {
+            const transaction = transactions[index];
+            const { employeeId, type, amount } = transaction;
+
+            // 調整餘額
+            if (type === '存款') {
+                bankData[employeeId].balance -= amount;
+            } else if (type === '提款') {
+                bankData[employeeId].balance += amount;
+            }
+
+            // 刪除交易記錄
+            transactions.splice(index, 1);
+
+            // 更新餘額顯示（如果當前顯示的是該員工的餘額）
+            const currentEmployeeId = document.getElementById('employeeId').value.trim();
+            if (currentEmployeeId === employeeId) {
+                document.getElementById('balance').value = bankData[employeeId].balance || '';
+            }
+
+            // 保存資料並更新交易表格
+            saveData();
+            updateAdminTable();
+        }
+
+        // 更新管理員交易表格
+        function updateAdminTable() {
+            const tbody = document.getElementById('transactionBody');
+            tbody.innerHTML = '';
+            transactions.forEach((t, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${t.employeeId}</td>
+                    <td>${t.type}</td>
+                    <td>${t.amount}</td>
+                    <td>${t.date}</td>
+                    <td>${t.balance}</td>
+                    <td><button class="delete-btn" onclick="deleteTransaction(${index})">刪除</button></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 初始化
+        updateDate();
+        updateAdminTable();
+    </script>
+</body>
+</html>
